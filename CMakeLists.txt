@@ -4,7 +4,7 @@ project(RetroEngine)
 
 set(DECOMP_VERSION 1.1.1)
 
-set(RETRO_REVISION 3 CACHE STRING "What revision to compile for. Defaults to v5U = 3")
+set(RETRO_REVISION 2 CACHE STRING "What revision to compile for. Defaults to v5U = 3")
 option(RETRO_DISABLE_PLUS "Disable plus. Should be set on for any public releases." OFF)
 
 option(RETRO_MOD_LOADER "Enables or disables the mod loader." ON)
