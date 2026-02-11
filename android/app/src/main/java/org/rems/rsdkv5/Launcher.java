@@ -46,6 +46,10 @@ public class Launcher extends AppCompatActivity {
                 result -> {
                     if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                         basePath = result.getData().getData();
+                        
+                        getContentResolver().takePersistableUriPermission(basePath, takeFlags);
+                        
+                        refreshStore();
                         startGame(true);
                     } else {
                         quit(0);
@@ -138,7 +142,6 @@ public class Launcher extends AppCompatActivity {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION |
                     Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
 
-            getContentResolver().takePersistableUriPermission(basePath, takeFlags);
             instance = this;
             gameLauncher.launch(intent);
         }
@@ -147,10 +150,7 @@ public class Launcher extends AppCompatActivity {
     private void folderPicker() {
         refreshStore();
         
-        Uri initialUri = Uri.parse("content://com.android.externalstorage.documents/tree/primary%3ARSDK%2Fv5");
-        
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-                .putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri)
                 .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
                         Intent.FLAG_GRANT_READ_URI_PERMISSION |
                         Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
