@@ -28,7 +28,6 @@ public class Launcher extends AppCompatActivity {
     private static final int RSDK_VER = 5;
     private static Uri basePath = null;
     public static Launcher instance = null;
-    private static File basePathStore;
     private static ActivityResultLauncher<Intent> folderLauncher = null;
     private static ActivityResultLauncher<Intent> gameLauncher = null;
 
@@ -39,17 +38,13 @@ public class Launcher extends AppCompatActivity {
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        basePathStore = new File(getFilesDir(), "basePathStore");
-
         folderLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> {
                     if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                         basePath = result.getData().getData();
-                        
                         getContentResolver().takePersistableUriPermission(basePath, takeFlags);
-                        
-                        refreshStore();
+                        refreshStore(this);
                         startGame(true);
                     } else {
                         quit(0);
@@ -86,7 +81,8 @@ public class Launcher extends AppCompatActivity {
         System.exit(code);
     }
 
-    public static Uri refreshStore() {
+    public static Uri refreshStore(Context context) {
+        File basePathStore = new File(context.getFilesDir(), "basePathStore");
         if (basePathStore.exists() && basePath == null) {
             try {
                 BufferedReader reader = new BufferedReader(new FileReader(basePathStore));
@@ -111,7 +107,7 @@ public class Launcher extends AppCompatActivity {
     }
 
     private void startGame(boolean fromPicker) {
-        refreshStore();
+        refreshStore(this);
 
         boolean found = false;
         if (basePath != null) {
@@ -148,7 +144,7 @@ public class Launcher extends AppCompatActivity {
     }
 
     private void folderPicker() {
-        refreshStore();
+        refreshStore(this);
         
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
                 .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
