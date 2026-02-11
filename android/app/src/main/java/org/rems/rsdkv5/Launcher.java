@@ -7,9 +7,7 @@ import android.content.Intent;
 import android.content.UriPermission;
 import android.net.Uri;
 import android.os.Bundle;
-import android.os.CountDownTimer;
 import android.provider.DocumentsContract;
-import android.util.Log;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
@@ -24,17 +22,13 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.concurrent.TimeUnit;
 
 public class Launcher extends AppCompatActivity {
 
     private static final int RSDK_VER = 5;
     private static Uri basePath = null;
-
     public static Launcher instance = null;
-
     private static File basePathStore;
-
     private static ActivityResultLauncher<Intent> folderLauncher = null;
     private static ActivityResultLauncher<Intent> gameLauncher = null;
 
@@ -52,26 +46,17 @@ public class Launcher extends AppCompatActivity {
                 result -> {
                     if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                         basePath = result.getData().getData();
+                        startGame(true);
+                    } else {
+                        quit(0);
                     }
-                    try {
-                        Log.i("hi", String.format("%d", getContentResolver().openInputStream(
-                                DocumentFile.fromTreeUri(this, basePath).findFile("Settings.ini").getUri()).read()));
-                    } catch (FileNotFoundException e) {
-                        e.printStackTrace();
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                    startGame(true);
                 });
 
         gameLauncher = registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    quit(0);
-                });
+                result -> quit(0));
 
         boolean canRun = true;
-
         if (RSDK_VER == 5) {
             if (((ActivityManager) getSystemService(Context.ACTIVITY_SERVICE))
                     .getDeviceConfigurationInfo().reqGlEsVersion < 0x20000) {
@@ -97,35 +82,12 @@ public class Launcher extends AppCompatActivity {
         System.exit(code);
     }
 
-    static class DialogTimer extends CountDownTimer {
-        public AlertDialog alert;
-
-        public DialogTimer(long millisInFuture, long countDownInterval) {
-            super(millisInFuture, countDownInterval);
-        }
-
-        @Override
-        public void onTick(long l) {
-            alert.setMessage(String.format(
-                    "Game will start in %s in %d seconds...",
-                    basePath.getPath(),
-                    TimeUnit.MILLISECONDS.toSeconds(l) + 1));
-        }
-
-        @Override
-        public void onFinish() {
-            alert.getButton(AlertDialog.BUTTON_POSITIVE).callOnClick();
-        }
-    }
-
     public static Uri refreshStore() {
         if (basePathStore.exists() && basePath == null) {
             try {
                 BufferedReader reader = new BufferedReader(new FileReader(basePathStore));
                 String uri = reader.readLine();
-                if (uri != null) {
-                    basePath = Uri.parse(uri);
-                }
+                if (uri != null) basePath = Uri.parse(uri);
                 reader.close();
             } catch (IOException e) {
                 e.printStackTrace();
@@ -145,111 +107,71 @@ public class Launcher extends AppCompatActivity {
     }
 
     private void startGame(boolean fromPicker) {
-
         refreshStore();
 
         boolean found = false;
         if (basePath != null) {
             for (UriPermission uriPermission : getContentResolver().getPersistedUriPermissions()) {
-                if (uriPermission.getUri().toString().matches(basePath.toString())) {
+                if (uriPermission.getUri().toString().equals(basePath.toString())) {
                     found = true;
                     break;
                 }
             }
         }
 
-        if (!found && !fromPicker) {
-            new AlertDialog.Builder(this)
-                    .setTitle("Path confirmation")
-                    .setMessage(basePath != null ? "Please reconfirm the path the game should run in."
-                            : "Please set the path the game should run in.")
-                    .setPositiveButton("OK", (dialog, i) -> {
-                        folderPicker();
-                    })
-                    .setNegativeButton("Cancel", (dialog, i) -> {
-                        dialog.cancel();
-                        quit(3);
-                    })
-                    .setCancelable(false)
-                    .show();
+        if (!found) {
+            folderPicker();
         } else {
-            AlertDialog baseAlert = null;
+            try {
+                if (DocumentFile.fromTreeUri(this, basePath).findFile(".nomedia") == null)
+                    createFile(".nomedia");
+            } catch (Exception e) {}
 
-            DialogTimer timer = new DialogTimer(5000, 100);
+            Intent intent = new Intent(this, RSDK.class);
+            intent.setData(basePath);
+            intent.setFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+            
+            grantUriPermission(getPackageName() + ".RSDK", basePath,
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
 
-            baseAlert = new AlertDialog.Builder(this)
-                    .setTitle("Game starting")
-                    .setMessage("Game will start in...")
-                    .setPositiveButton("Start", (dialog, i) -> {
-                        timer.cancel();
-                        // String p = Environment.getExternalStorageDirectory().getAbsolutePath() + "/"
-                        // + basePath;
-                        try {
-                            if (DocumentFile.fromTreeUri(this, basePath).findFile(".nomedia") == null)
-                                createFile(".nomedia");
-                        } catch (Exception e) {
-                        }
-
-                        Intent intent = new Intent(this, RSDK.class);
-                        intent.setData(basePath);
-                        intent.setFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
-                                Intent.FLAG_GRANT_READ_URI_PERMISSION |
-                                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-                        grantUriPermission(getApplicationContext().getPackageName() + ".RSDK", basePath,
-                                Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
-                                        Intent.FLAG_GRANT_READ_URI_PERMISSION |
-                                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-
-                        getContentResolver().takePersistableUriPermission(basePath, takeFlags);
-
-                        instance = this;
-
-                        gameLauncher.launch(intent);
-                    })
-                    .setNeutralButton("Change Path", (dialog, i) -> {
-                        timer.cancel();
-                        getContentResolver().releasePersistableUriPermission(basePath, takeFlags);
-                        folderPicker();
-                    })
-                    .create();
-
-            timer.alert = baseAlert;
-            baseAlert.setOnShowListener(dialog -> timer.start());
-
-            baseAlert.show();
+            getContentResolver().takePersistableUriPermission(basePath, takeFlags);
+            instance = this;
+            gameLauncher.launch(intent);
         }
     }
 
     private void folderPicker() {
         refreshStore();
-        folderLauncher.launch(
-                new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
-                        .putExtra(DocumentsContract.EXTRA_INITIAL_URI, basePath)
-                        .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
-                                Intent.FLAG_GRANT_READ_URI_PERMISSION |
-                                Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION));
+        
+        Uri initialUri = Uri.parse("content://com.android.externalstorage.documents/tree/primary%3ARSDK%2Fv5");
+        
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE)
+                .putExtra(DocumentsContract.EXTRA_INITIAL_URI, initialUri)
+                .addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION |
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        
+        folderLauncher.launch(intent);
     }
 
     public Uri createFile(String filename) throws FileNotFoundException {
-
         DocumentFile path = DocumentFile.fromTreeUri(getApplicationContext(), basePath);
         while (filename.indexOf('/') != -1) {
             String sub = filename.substring(0, filename.indexOf('/'));
             if (!sub.isEmpty()) {
                 DocumentFile find = path.findFile(sub);
-                if (find == null)
-                    path = path.createDirectory(sub);
-                else
-                    path = find;    
+                if (find == null) path = path.createDirectory(sub);
+                else path = find;    
             }
             filename = filename.substring(filename.indexOf('/') + 1);
         }
 
         DocumentFile find = path.findFile(filename);
-        if (find == null)
-            return path.createFile("application/octet-stream", filename).getUri();
-        else
-            return find.getUri();
+        if (find == null) return path.createFile("application/octet-stream", filename).getUri();
+        else return find.getUri();
     }
-
 }
