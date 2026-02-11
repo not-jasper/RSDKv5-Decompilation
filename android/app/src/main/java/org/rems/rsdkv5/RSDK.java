@@ -79,7 +79,7 @@ public class RSDK extends GameActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         if (basePath == null) {
-            basePath = Launcher.refreshStore();
+            basePath = Launcher.refreshStore(this);
 
             boolean hasPermission = false;
             if (basePath != null) {
